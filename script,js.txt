@@ -1,0 +1,124 @@
+// ============================================
+// TEMA CLARO / ESCURO
+// ============================================
+const btnTema    = document.getElementById("btnTema");
+const iconeTema  = document.getElementById("iconeTema");
+const textoTema  = document.getElementById("textoTema");
+const html       = document.documentElement;
+
+// 1) Descobre o tema inicial:
+//    - localStorage tem preferência
+//    - senão, usa o do sistema
+//    - senão, claro
+function obterTemaInicial() {
+    const salvo = localStorage.getItem("tema");
+    if (salvo === "light" || salvo === "dark") return salvo;
+
+    const prefereEscuro = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    return prefereEscuro ? "dark" : "light";
+}
+
+// 2) Aplica um tema na página + atualiza o botão
+function aplicarTema(tema) {
+    html.setAttribute("data-theme", tema);
+
+    if (tema === "dark") {
+        iconeTema.textContent = "☀️";
+        textoTema.textContent = "Claro";
+    } else {
+        iconeTema.textContent = "🌙";
+        textoTema.textContent = "Escuro";
+    }
+}
+
+// 3) Alterna e salva
+function alternarTema() {
+    const atual = html.getAttribute("data-theme");
+    const novo = atual === "dark" ? "light" : "dark";
+    aplicarTema(novo);
+    localStorage.setItem("tema", novo);
+}
+
+// 4) Inicializa (roda assim que o script carrega)
+aplicarTema(obterTemaInicial());
+btnTema.addEventListener("click", alternarTema);
+
+// 5) Se o sistema mudar de tema e o usuário não escolheu manualmente,
+//    acompanha (opcional, mas elegante)
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
+    if (!localStorage.getItem("tema")) {
+        aplicarTema(e.matches ? "dark" : "light");
+    }
+});
+
+
+// ============================================
+// LEITURA (com travas de concorrência)
+// ============================================
+let leituraAtual = null;
+let estaLendo = false;
+
+const btnLer    = document.getElementById("btnLer");
+const btnParar  = document.getElementById("btnParar");
+const statusEl  = document.getElementById("status");
+const campoTexto = document.getElementById("texto");
+
+function atualizarStatus(msg) {
+    statusEl.textContent = "Status: " + msg;
+}
+
+function definirBotoes(modoLendo) {
+    btnLer.disabled   = modoLendo;
+    btnParar.disabled = !modoLendo;
+}
+
+function pararLeitura() {
+    if (!leituraAtual) return;
+    try { speechSynthesis.cancel(); } catch (e) { console.warn(e); }
+    leituraAtual = null;
+    estaLendo = false;
+    definirBotoes(false);
+    atualizarStatus("parado");
+}
+
+function iniciarLeitura() {
+    if (estaLendo) return;
+
+    const texto = campoTexto.value.trim();
+    if (!texto) { atualizarStatus("nada para ler"); return; }
+
+    speechSynthesis.cancel();
+
+    leituraAtual = new SpeechSynthesisUtterance(texto);
+    leituraAtual.lang = "pt-BR";
+
+    leituraAtual.onend = () => {
+        leituraAtual = null;
+        estaLendo = false;
+        definirBotoes(false);
+        atualizarStatus("concluído");
+    };
+
+    leituraAtual.onerror = (event) => {
+        if (event.error !== "canceled" && event.error !== "interrupted") {
+            console.error("Erro:", event.error);
+            atualizarStatus("erro");
+        }
+        leituraAtual = null;
+        estaLendo = false;
+        definirBotoes(false);
+    };
+
+    estaLendo = true;
+    definirBotoes(true);
+    atualizarStatus("lendo...");
+    speechSynthesis.speak(leituraAtual);
+}
+
+btnLer.addEventListener("click", iniciarLeitura);
+btnParar.addEventListener("click", pararLeitura);
+window.addEventListener("beforeunload", pararLeitura);
+
+// Estado inicial
+definirBotoes(false);
+atualizarStatus("pronto");
